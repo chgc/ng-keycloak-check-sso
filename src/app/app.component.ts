@@ -1,13 +1,29 @@
-import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { SecurityStore } from './security-store.service';
+import { HttpClient } from '@angular/common/http';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.css'
+  styleUrl: './app.component.css',
 })
 export class AppComponent {
-  title = 'keycloak-exp';
+  #securityStore = inject(SecurityStore);
+  user = this.#securityStore.loadedUser;
+  http = inject(HttpClient);
+
+  signOut() {
+    this.#securityStore.signOut();
+  }
+
+  signIn() {
+    this.#securityStore.signIn();
+  }
+
+  callAPI() {
+    this.http
+      .get('https://api.example.com/data')
+      .subscribe((data) => console.log(data));
+  }
 }
