@@ -1,38 +1,71 @@
 import {
+  HTTP_INTERCEPTORS,
+  provideHttpClient,
+  withInterceptors,
+  withInterceptorsFromDi,
+} from '@angular/common/http';
+import {
+  APP_INITIALIZER,
   ApplicationConfig,
-  inject,
+  importProvidersFrom,
+  Provider,
   provideZoneChangeDetection,
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
-
-import { routes } from './app.routes';
 import {
-  HttpInterceptorFn,
-  provideHttpClient,
-  withInterceptors,
-} from '@angular/common/http';
-import { SecurityStore } from './security-store.service';
+  KeycloakAngularModule,
+  KeycloakBearerInterceptor,
+  KeycloakService,
+} from 'keycloak-angular';
+import { routes } from './app.routes';
 
-export const securityInterceptor: HttpInterceptorFn = (req, next) => {
-  const keycloakService = inject(SecurityStore);
+export function initializeKeycloak(
+  keycloak: KeycloakService,
+): () => Promise<boolean> {
+  return (): Promise<boolean> =>
+    keycloak
+      .init({
+        config: {
+          url: 'http://localhost:8081',
+          realm: 'home-lab',
+          clientId: 'ng-web',
+        },
+        initOptions: {
+          onLoad: 'check-sso',
+          checkLoginIframe: false,
+          silentCheckSsoRedirectUri:
+            window.location.origin + '/assets/silent-check-sso.html',
+        },
+        enableBearerInterceptor: true,
+        bearerExcludedUrls: ['/assets'],
+      })
+      .then((auth) => {
+        if (!auth) {
+          keycloak.login();
+        }
+        return auth;
+      });
+}
 
-  const bearer = keycloakService.user()?.bearer;
-
-  if (!bearer) {
-    return next(req);
-  }
-
-  return next(
-    req.clone({
-      headers: req.headers.set('Authorization', `Bearer ${bearer}`),
-    }),
-  );
+const KeycloakBearerInterceptorProvider: Provider = {
+  provide: HTTP_INTERCEPTORS,
+  useClass: KeycloakBearerInterceptor,
+  multi: true,
+  deps: [KeycloakService],
 };
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([securityInterceptor])),
+    KeycloakBearerInterceptorProvider,
+    provideHttpClient(withInterceptorsFromDi()),
+    importProvidersFrom(KeycloakAngularModule),
+    {
+      provide: APP_INITIALIZER,
+      useFactory: initializeKeycloak,
+      multi: true,
+      deps: [KeycloakService],
+    },
   ],
 };

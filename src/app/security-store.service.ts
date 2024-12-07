@@ -1,6 +1,15 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { KeycloakService } from './keycloak.service';
+import { KeycloakService } from 'keycloak-angular';
 import { ANONYMOUS_USER, User } from './models';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+  token: string;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -13,22 +22,22 @@ export class SecurityStore {
 
   loadedUser = computed(() => (this.loaded() ? this.user() : undefined));
   signedIn = computed(() => this.loaded() && !this.user()?.anonymous);
+  keycloakService = inject(KeycloakService);
 
   constructor() {
     this.onInit();
   }
 
   async onInit() {
-    const keycloakService = inject(KeycloakService);
-
-    const isLoggedIn = await keycloakService.init();
-    if (isLoggedIn && keycloakService.profile) {
-      const { sub, email, given_name, family_name, token } =
-        keycloakService.profile;
+    if (this.keycloakService.isLoggedIn()) {
+      const profile =
+        (await this.keycloakService.loadUserProfile()) as unknown as UserProfile;
+      const { id, email, firstName, lastName } = profile;
+      const token = await this.#keycloakService.getToken();
       const user = {
-        id: sub,
+        id,
         email,
-        name: `${given_name} ${family_name}`,
+        name: `${firstName} ${lastName}`,
         anonymous: false,
         bearer: token,
       };
